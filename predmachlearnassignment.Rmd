@@ -1,0 +1,98 @@
+---
+title: "Weight lifting prediction"
+author: "Mogens Yde-Andersen"
+date: "23. aug. 2015"
+output:
+  html_document:
+    theme: united
+    toc: yes
+  md_document:
+    toc: yes
+  word_document: default
+---
+
+github submission
+gh pages på branch
+###Analysis
+
+This is my report on the practical machine learning assignment regarding the creation of a prediction model for weight lifting quality classification.
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+Load and clean training data set
+
+```{r "chunk1", echo=TRUE, cache=TRUE}
+inTrain <- read.csv("./pml-training.csv", header=TRUE, sep=",")
+inTrain <- inTrain[,-c(1:7)] ##remove experiment metadata, since they are not relevant for classe outcome
+inTrain <-inTrain[,colSums(is.na(inTrain))==0] ##remove columns with missing values (since they are calculations over observations)
+col_names <- c()
+n <- ncol(inTrain)-1
+for (i in 1:n){
+  if (is.factor(inTrain[,i])){
+    col_names <- c(col_names, i)
+  }
+} ##put all factor variables in a file - except outcome varible classe
+library(lattice);library(ggplot2);library(caret)
+inTrain <- inTrain[,-col_names] ##remove calculation variables and variables with no relevant data
+training <- createDataPartition(y=inTrain$classe,p=0.75,list=FALSE)
+trainingSet <- inTrain[training,]
+testingSet <- inTrain[-training,]
+```
+
+Build a prediction model with random forest
+
+```{r "chunk2", echo=TRUE, cache=TRUE}
+library(randomForest)
+modFitrf52 <- randomForest(classe~.,data=trainingSet, prox=TRUE)
+modFitrf52
+predrf52 <- predict(modFitrf52,newdata=testingSet[,-53])
+table(testingSet$classe,predrf52)
+```
+Note the very low error rate of only 0.4%. This means that the random forest prediction above has an accuracy of 99.6%.
+
+Build an alternative prediction model with classification tree (rpart).
+
+```{r "chunk3", echo=TRUE, cache=TRUE}
+library(rpart)
+modFitrpart52 <- train(classe~.,data=trainingSet,method="rpart")
+modFitrpart52
+modFitrpart52$finalModel
+predrpart52 <- predict(modFitrpart52,newdata=testingSet[,-53])
+table(testingSet$classe,predrpart52)
+```
+Note the relatively low accuracy of 50.7%. I go with the random forest prediction model.
+
+Cross validation on the random forest prediction model
+
+```{r "chunk4", echo=TRUE, cache=TRUE}
+seedcode <- 12345
+accuracies <-c()
+for (i in 1:3){
+       set.seed(seedcode)
+       seedcode <- seedcode+1
+       training <- createDataPartition(y=inTrain$classe, p=0.75, list=FALSE)
+       trainingSet<- inTrain[training,]
+       testingSet<- inTrain[-training,]
+       modelFitchoice <- randomForest(classe ~., data = testingSet)
+       prediction <- predict(modelFitchoice, testingSet)
+       testingSet$rightPred <- prediction == testingSet$classe
+       t<-table(prediction, testingSet$classe)
+       print(t)
+       accuracy <- sum(testingSet$rightPred)/nrow(testingSet)
+       print(accuracy)
+}
+```
+I guess that the cross validation and accuracy is optimal :O).
+
+Load and clean the testing data set
+
+```{r "chunk5", echo=TRUE, cache=TRUE}
+testing <- read.csv("./pml-testing.csv", header=TRUE, sep=",")
+testing <- testing[,-c(1:7)] 
+testing <-testing[,colSums(is.na(testing))==0]
+predictiontesting <- predict(modelFitchoice, testing)
+predictiontesting
+```
+
